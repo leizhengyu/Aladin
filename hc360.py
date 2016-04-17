@@ -5,7 +5,7 @@ import re
 import lxml.etree
 import lxml.html
 import string
-
+from socket import *
 
 def get_infolist(httpurl,keywords):
     url = httpurl + "&w=" + urllib.parse.quote(keywords.encode(charset))
@@ -13,10 +13,12 @@ def get_infolist(httpurl,keywords):
     i =0
     while 1 :
         i += 1
-        for af in (0,2):
-            url += "&ee=%d"% i
-            url += "" if af ==0 else "&af=%d"% af
-            rtn = get_info(url)
+        for af in [0,3]:
+            ee = "" if i == 1 else "&ee=%d"%i
+            page = url + ee
+            page += "" if af ==0 else "&af=%d"% af
+            print(page)
+            rtn = get_info(page)
             if rtn == 1 :
                 exit()
 
@@ -26,7 +28,7 @@ def get_info(url):
 
     doc = lxml.html.document_fromstring(rsp.data)
 
-    alist=doc.xpath('//dd[@class="newCname"]/p/a')
+    alist=doc.xpath('//dd[@class="til"]/h3/a[@data-exposurelog]')
 
     if len(alist) == 0:
         return 1
@@ -37,44 +39,51 @@ def get_info(url):
             url = href  + '/pubinfo/businesscard.html'
             print(url)
             data = get_seller(url)
-            print(data)
+            if data != None :
+                jsdata = json.dumps(data)
+                client.send(jsdata.encode("utf-8"))
+                print(data)
         return 0
 
 
 def get_seller(url):
-    rsp=pool.request("GET",url,headers=headers)
-    doc=lxml.html.document_fromstring(rsp.data)
-    companyName = doc.xpath('head/title/text()')
-    name = doc.xpath('//a[@class="name"]/text()')[0]
-    info = doc.xpath('//span[@class="px1216"]/text()')
-    strinfo = "".join(info)
-    mc = re.search(r"地址：(\w*)",strinfo,re.MULTILINE)
-    print(mc.group(1))
-    addr = "" if mc == None else mc.group(1)
+    try:
+        rsp=pool.request("GET",url,headers=headers)
+        if rsp.status == 404 :
+            return
+        doc=lxml.html.document_fromstring(rsp.data)
+        companyName = doc.xpath('head/title/text()')
+        name = doc.xpath('//a[@class="name"]/text()')[0]
+        info = doc.xpath('//span[@class="px1216"]/text()')
+        strinfo = "#".join(info) + "#"
+        mc = re.search(r"地址：(.*?)\s*#",strinfo,re.MULTILINE)
+        addr = "" if mc == None else mc.group(1)
 
-    mc = re.search(r'邮编：(\w*)',strinfo,re.MULTILINE)
-    zipcode = "" if mc == None else mc.group(1)
-    mctel = re.search(r'电话：(\w*)',strinfo,re.MULTILINE)
-    tel = "" if mc == None else mc.group(1)
-    mcmobile = re.search(r'手机：(\w*)',strinfo,re.MULTILINE)
-    mobile = "" if mc == None else mc.group(1)
-    mcfax = re.search(r'传真：(\w*)',strinfo,re.MULTILINE)
-    fax = "" if mc == None else mc.group(1)
+        mc = re.search(r'邮编：(.*?)\s*#',strinfo,re.MULTILINE)
+        zipcode = "" if mc == None else mc.group(1)
+        mctel = re.search(r'电话：(.*?)\s*#',strinfo,re.MULTILINE)
+        tel = "" if mc == None else mc.group(1)
+        mcmobile = re.search(r'手机：(.*?)\s*#',strinfo,re.MULTILINE)
+        mobile = "" if mc == None else mc.group(1)
+        mcfax = re.search(r'传真：(.*?)\s*#',strinfo,re.MULTILINE)
+        fax = "" if mc == None else mc.group(1)
 
-    website=doc.xpath('//span[@class="px1216"]/a')
-    wbs=[]
-    for wb in website:
-        wbs.append(wb.attrib['href'].strip())
+        website=doc.xpath('//span[@class="px1216"]/a')
+        wbs=[]
+        for wb in website:
+            wbs.append(wb.attrib['href'].strip())
 
-    data = {"name": name,
-            "tel" : tel,
-            "mobile": mobile,
-            "fax": fax,
-            "addr": addr,
-            "zipcode":zipcode,
-            "website":wbs
-            }
-    return data
+        data = {"name": name,
+                "tel" : tel,
+                "mobile": mobile,
+                "fax": fax,
+                "addr": addr,
+                "zipcode":zipcode,
+                "website":wbs
+                }
+        return data
+    except:
+        return
 
 
 
@@ -113,9 +122,19 @@ headers = {'User-Agent':'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trid
 }
 
 
-url = "http://s.hc360.com/?mc=seller"
+url = "http://s.hc360.com/?mc=enterprise"
+
+host = '127.0.0.1'
+port = 456
+bufsize = 1024
+addr = (host,port)
+client = socket(AF_INET,SOCK_DGRAM)
+client.connect(addr)
+
+
+
 get_infolist(url,keywords)
 
-
+client.close()
 
 
